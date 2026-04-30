@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'providers/steam_provider.dart';
+import 'screens/steam_login_screen.dart';
+import 'models/game.dart';
 
 void main() {
   runApp(const MyApp());
@@ -9,37 +13,55 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Tip-Top Games',
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFF0F0F1E),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6C5FFF),
+    return MultiProvider(
+      providers: [ChangeNotifierProvider(create: (_) => SteamProvider())],
+      child: MaterialApp(
+        title: 'Tip-Top Games',
+        theme: ThemeData(
           brightness: Brightness.dark,
+          useMaterial3: true,
+          scaffoldBackgroundColor: const Color(0xFF0F0F1E),
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF6C5FFF),
+            brightness: Brightness.dark,
+          ),
         ),
+        home: const AppEntry(),
       ),
-      home: const MainNavigation(),
     );
   }
 }
 
-// Model de Game
-class Game {
-  final String id;
-  final String title;
-  final String imageUrl;
-  final double hours;
-  final List<String> genres;
+// Widget que decide mostrar login o app principal
+class AppEntry extends StatefulWidget {
+  const AppEntry({super.key});
 
-  Game({
-    required this.id,
-    required this.title,
-    required this.imageUrl,
-    required this.hours,
-    required this.genres,
-  });
+  @override
+  State<AppEntry> createState() => _AppEntryState();
+}
+
+class _AppEntryState extends State<AppEntry> {
+  @override
+  void initState() {
+    super.initState();
+    // Inicializar y verificar si hay sesión previa
+    Future.microtask(() {
+      context.read<SteamProvider>().initialize();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<SteamProvider>(
+      builder: (context, steamProvider, _) {
+        if (steamProvider.isAuthenticated) {
+          return const MainNavigation();
+        } else {
+          return const SteamLoginScreen();
+        }
+      },
+    );
+  }
 }
 
 // Pantalla de navegación principal
@@ -58,18 +80,12 @@ class _MainNavigationState extends State<MainNavigation> {
     return Scaffold(
       body: IndexedStack(
         index: _selectedIndex,
-        children: const [
-          SteamTimeHome(),
-          LibraryScreen(),
-          ProfileScreen(),
-        ],
+        children: const [SteamTimeHome(), LibraryScreen(), ProfileScreen()],
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           border: Border(
-            top: BorderSide(
-              color: const Color(0xFF6C5FFF).withOpacity(0.2),
-            ),
+            top: BorderSide(color: const Color(0xFF6C5FFF).withOpacity(0.2)),
           ),
         ),
         child: BottomNavigationBar(
@@ -84,18 +100,9 @@ class _MainNavigationState extends State<MainNavigation> {
             });
           },
           items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home),
-              label: '',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.library_books),
-              label: '',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person),
-              label: '',
-            ),
+            BottomNavigationBarItem(icon: Icon(Icons.home), label: ''),
+            BottomNavigationBarItem(icon: Icon(Icons.library_books), label: ''),
+            BottomNavigationBarItem(icon: Icon(Icons.person), label: ''),
           ],
         ),
       ),
@@ -135,242 +142,327 @@ class _SteamTimeHomeState extends State<SteamTimeHome> {
     }
   }
 
+  List<Game> _getFilteredGames(SteamProvider provider) {
+    // Obtener juegos filtrados por tiempo
+    var filtered = provider.filterByPlaytime(0, _selectedTime);
+
+    // Si hay géneros seleccionados, filtrar por esos también
+    if (_selectedGenres.isNotEmpty) {
+      filtered = filtered
+          .where(
+            (game) =>
+                game.genres.any((g) => _selectedGenres.contains(g)) ||
+                _selectedGenres.isEmpty,
+          )
+          .toList();
+    }
+
+    return filtered;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Tip-Top Games',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF6C5FFF),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(
-                      Icons.person,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                ],
+      body: Consumer<SteamProvider>(
+        builder: (context, steamProvider, _) {
+          if (steamProvider.isLoading) {
+            return const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6C5FFF)),
               ),
-            ),
-            // Main content
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Question
-                  const Text(
-                    '¿Cuánto tiempo\ntienes hoy?',
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      height: 1.2,
-                    ),
+            );
+          }
+
+          final filteredGames = _getFilteredGames(steamProvider);
+
+          return SingleChildScrollView(
+            child: Column(
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 20,
                   ),
-                  const SizedBox(height: 8),
-                  // Subtitle
-                  const Text(
-                    'Gemini AI analizará tu biblioteca de 6 juegos para encontrar la sesión perfecta.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF9999AA),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  // Time display circle
-                  Center(
-                    child: Container(
-                      width: 200,
-                      height: 200,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            const Color(0xFF6C5FFF).withOpacity(0.3),
-                            const Color(0xFF4A3FA3).withOpacity(0.3),
-                          ],
-                        ),
-                        border: Border.all(
-                          color: const Color(0xFF6C5FFF).withOpacity(0.5),
-                          width: 1,
-                        ),
-                      ),
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              '${_selectedTime.toInt()}',
-                              style: const TextStyle(
-                                fontSize: 60,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const Text(
-                              'min',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Color(0xFF9999AA),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'TIEMPO DE JUEGO',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF9999AA),
-                                letterSpacing: 1,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  // Slider
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Slider(
-                        value: _selectedTime,
-                        min: 10,
-                        max: 120,
-                        activeColor: const Color(0xFF6C5FFF),
-                        inactiveColor: const Color(0xFF6C5FFF).withOpacity(0.2),
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedTime = value;
-                          });
-                        },
+                      const Text(
+                        'Tip-Top Games',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              '10m',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF9999AA),
-                              ),
-                            ),
-                            const Text(
-                              '1h',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF9999AA),
-                              ),
-                            ),
-                            const Text(
-                              '2h+',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF9999AA),
-                              ),
-                            ),
-                          ],
+                      GestureDetector(
+                        onTap: () {
+                          context.read<SteamProvider>().logout();
+                        },
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6C5FFF),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Icon(
+                            Icons.logout,
+                            color: Colors.white,
+                            size: 20,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 40),
-                  // Game genre section
-                  const Text(
-                    '¿QUÉ TIENES GANAS DE JUGAR?',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF9999AA),
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // Genre chips
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: genres.map((genre) {
-                      final isSelected = _selectedGenres.contains(genre);
-                      return FilterChip(
-                        label: Text(genre),
-                        selected: isSelected,
-                        onSelected: (selected) {
-                          setState(() {
-                            if (selected) {
-                              _selectedGenres.add(genre);
-                            } else {
-                              _selectedGenres.remove(genre);
-                            }
-                          });
-                        },
-                        backgroundColor: const Color(0xFF1A1A2E),
-                        selectedColor: const Color(0xFF6C5FFF),
-                        labelStyle: TextStyle(
-                          color: isSelected ? Colors.white : const Color(0xFF9999AA),
-                          fontSize: 13,
-                        ),
-                        side: BorderSide(
-                          color: isSelected
-                              ? const Color(0xFF6C5FFF)
-                              : const Color(0xFF6C5FFF).withOpacity(0.3),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 40),
-                  // Main button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6C5FFF),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      onPressed: () {},
-                      child: const Text(
-                        '🔮 Buscar sugerencias con IA',
+                ),
+                // Main content
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Question
+                      const Text(
+                        '¿Cuánto tiempo\ntienes hoy?',
                         style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          height: 1.2,
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 8),
+                      // Subtitle
+                      Text(
+                        'Elige tiempo y género para encontrar sugerencias en tu biblioteca (${steamProvider.games.length} juegos)',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF9999AA),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      // Time display circle
+                      Center(
+                        child: Container(
+                          width: 200,
+                          height: 200,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                const Color(0xFF6C5FFF).withOpacity(0.3),
+                                const Color(0xFF4A3FA3).withOpacity(0.3),
+                              ],
+                            ),
+                            border: Border.all(
+                              color: const Color(0xFF6C5FFF).withOpacity(0.5),
+                              width: 1,
+                            ),
+                          ),
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  '${_selectedTime.toInt()}',
+                                  style: const TextStyle(
+                                    fontSize: 60,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const Text(
+                                  'min',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Color(0xFF9999AA),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'TIEMPO DE JUEGO',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF9999AA),
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      // Slider
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Slider(
+                            value: _selectedTime,
+                            min: 10,
+                            max: 120,
+                            activeColor: const Color(0xFF6C5FFF),
+                            inactiveColor: const Color(
+                              0xFF6C5FFF,
+                            ).withOpacity(0.2),
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedTime = value;
+                              });
+                            },
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  '10m',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF9999AA),
+                                  ),
+                                ),
+                                const Text(
+                                  '1h',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF9999AA),
+                                  ),
+                                ),
+                                const Text(
+                                  '2h+',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF9999AA),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 40),
+                      // Game genre section
+                      const Text(
+                        '¿QUÉ TIENES GANAS DE JUGAR?',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF9999AA),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Genre chips
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: genres.map((genre) {
+                          final isSelected = _selectedGenres.contains(genre);
+                          return FilterChip(
+                            label: Text(genre),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) {
+                                  _selectedGenres.add(genre);
+                                } else {
+                                  _selectedGenres.remove(genre);
+                                }
+                              });
+                            },
+                            backgroundColor: const Color(0xFF1A1A2E),
+                            selectedColor: const Color(0xFF6C5FFF),
+                            labelStyle: TextStyle(
+                              color: isSelected
+                                  ? Colors.white
+                                  : const Color(0xFF9999AA),
+                              fontSize: 13,
+                            ),
+                            side: BorderSide(
+                              color: isSelected
+                                  ? const Color(0xFF6C5FFF)
+                                  : const Color(0xFF6C5FFF).withOpacity(0.3),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 40),
+                      // Suggestions info
+                      if (filteredGames.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6C5FFF).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: const Color(0xFF6C5FFF).withOpacity(0.3),
+                            ),
+                          ),
+                          child: Text(
+                            '✨ ${filteredGames.length} juego(s) disponible(s) en tu biblioteca para este criterio',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF6C5FFF),
+                            ),
+                          ),
+                        )
+                      else
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF9999AA).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: const Color(0xFF9999AA).withOpacity(0.3),
+                            ),
+                          ),
+                          child: const Text(
+                            'No hay juegos disponibles con estos criterios',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF9999AA),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 20),
+                      // Main button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6C5FFF),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            disabledBackgroundColor: const Color(
+                              0xFF6C5FFF,
+                            ).withOpacity(0.5),
+                          ),
+                          onPressed: filteredGames.isNotEmpty ? () {} : null,
+                          child: const Text(
+                            '🎮 Ver sugerencias',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 30),
+                    ],
                   ),
-                  const SizedBox(height: 30),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -386,52 +478,8 @@ class LibraryScreen extends StatefulWidget {
 
 class _LibraryScreenState extends State<LibraryScreen> {
   final TextEditingController _searchController = TextEditingController();
-  String _sortBy = 'Recientes';
-  
-  final List<Game> games = [
-    Game(
-      id: '1',
-      title: 'Elden Ring',
-      imageUrl: 'assets/elden_ring.jpg',
-      hours: 48,
-      genres: ['Action', 'Adventure'],
-    ),
-    Game(
-      id: '2',
-      title: 'Rocket League',
-      imageUrl: 'assets/rocket_league.jpg',
-      hours: 19,
-      genres: ['Sports', 'Competitive'],
-    ),
-    Game(
-      id: '3',
-      title: 'Hades',
-      imageUrl: 'assets/hades.jpg',
-      hours: 15,
-      genres: ['Action', 'Roguelike'],
-    ),
-    Game(
-      id: '4',
-      title: 'Counter Strike 2',
-      imageUrl: 'assets/cs2.jpg',
-      hours: 4,
-      genres: ['Shooter', 'Competitive'],
-    ),
-    Game(
-      id: '5',
-      title: 'The Witcher 3',
-      imageUrl: 'assets/witcher3.jpg',
-      hours: 120,
-      genres: ['RPG', 'Adventure'],
-    ),
-    Game(
-      id: '6',
-      title: 'Celeste',
-      imageUrl: 'assets/celeste.jpg',
-      hours: 8,
-      genres: ['Platformer', 'Indie'],
-    ),
-  ];
+  String _sortBy = 'Tiempo jugado';
+  bool _sortAscending = false;
 
   @override
   void dispose() {
@@ -439,131 +487,350 @@ class _LibraryScreenState extends State<LibraryScreen> {
     super.dispose();
   }
 
+  List<Game> _sortGames(List<Game> games) {
+    final sortedGames = List<Game>.from(games);
+
+    if (_sortBy == 'Tiempo jugado') {
+      sortedGames.sort(
+        (a, b) => _sortAscending
+            ? a.hours.compareTo(b.hours)
+            : b.hours.compareTo(a.hours),
+      );
+    } else if (_sortBy == 'Nombre') {
+      sortedGames.sort(
+        (a, b) => _sortAscending
+            ? a.title.compareTo(b.title)
+            : b.title.compareTo(a.title),
+      );
+    }
+
+    return sortedGames;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: Consumer<SteamProvider>(
+        builder: (context, steamProvider, _) {
+          if (steamProvider.isLoading) {
+            return const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6C5FFF)),
+              ),
+            );
+          }
+
+          if (steamProvider.error != null) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text(
-                    'Tu Biblioteca',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
+                  const Icon(
+                    Icons.error_outline,
+                    color: Color(0xFF9999AA),
+                    size: 48,
                   ),
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF6C5FFF),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(
-                      Icons.person,
-                      color: Colors.white,
-                      size: 20,
+                  const SizedBox(height: 16),
+                  Text(
+                    'Error: ${steamProvider.error}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Color(0xFF9999AA)),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      context.read<SteamProvider>().initialize();
+                    },
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Reintentar'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6C5FFF),
                     ),
                   ),
                 ],
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+            );
+          }
+
+          // Si no hay juegos cargados
+          if (steamProvider.games.isEmpty) {
+            return Center(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Search bar
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1A1A2E),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: const Color(0xFF6C5FFF).withOpacity(0.2),
-                      ),
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: 'Buscar por nombre, género...',
-                        hintStyle: const TextStyle(
-                          color: Color(0xFF9999AA),
-                        ),
-                        border: InputBorder.none,
-                        prefixIcon: const Icon(
-                          Icons.search,
-                          color: Color(0xFF9999AA),
-                        ),
-                        suffixIcon: GestureDetector(
-                          onTap: () {
-                            _searchController.clear();
-                          },
-                          child: Icon(
-                            Icons.close,
-                            color: const Color(0xFF9999AA).withOpacity(0.5),
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      onChanged: (value) {
-                        setState(() {});
-                      },
-                    ),
+                  const Icon(
+                    Icons.videogame_asset_off,
+                    color: Color(0xFF9999AA),
+                    size: 48,
                   ),
                   const SizedBox(height: 16),
-                  // Filter info
-                  Row(
+                  const Text(
+                    'No hay juegos en tu biblioteca',
+                    style: TextStyle(color: Color(0xFF9999AA), fontSize: 16),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      context.read<SteamProvider>().logout();
+                    },
+                    icon: const Icon(Icons.logout),
+                    label: const Text('Cambiar cuenta'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          final games = steamProvider.games;
+          final filteredGames = _searchController.text.isEmpty
+              ? _sortGames(games)
+              : _sortGames(steamProvider.searchGames(_searchController.text));
+
+          // Calcular horas totales
+          final totalHours = games.fold<double>(
+            0,
+            (sum, game) => sum + game.hours,
+          );
+
+          return SingleChildScrollView(
+            child: Column(
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 20,
+                  ),
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        '${games.length} juegos • Ordenado por $_sortBy',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF9999AA),
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Tu Biblioteca',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${games.length} juegos • ${totalHours.toStringAsFixed(1)}h totales',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF9999AA),
+                            ),
+                          ),
+                        ],
                       ),
                       GestureDetector(
-                        onTap: () {},
-                        child: const Icon(
-                          Icons.tune,
-                          color: Color(0xFF9999AA),
-                          size: 20,
+                        onTap: () {
+                          context.read<SteamProvider>().logout();
+                        },
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6C5FFF),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Icon(
+                            Icons.logout,
+                            color: Colors.white,
+                            size: 20,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  // Games Grid
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 16,
-                      childAspectRatio: 0.75,
-                    ),
-                    itemCount: games.length,
-                    itemBuilder: (context, index) {
-                      final game = games[index];
-                      return GameCard(game: game);
-                    },
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Search bar
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A1A2E),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: const Color(0xFF6C5FFF).withOpacity(0.2),
+                          ),
+                        ),
+                        child: TextField(
+                          controller: _searchController,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'Buscar en tu biblioteca...',
+                            hintStyle: const TextStyle(
+                              color: Color(0xFF9999AA),
+                            ),
+                            border: InputBorder.none,
+                            prefixIcon: const Icon(
+                              Icons.search,
+                              color: Color(0xFF9999AA),
+                            ),
+                            suffixIcon: _searchController.text.isNotEmpty
+                                ? GestureDetector(
+                                    onTap: () {
+                                      _searchController.clear();
+                                      setState(() {});
+                                    },
+                                    child: const Icon(
+                                      Icons.close,
+                                      color: Color(0xFF9999AA),
+                                    ),
+                                  )
+                                : null,
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 12,
+                            ),
+                          ),
+                          onChanged: (value) {
+                            setState(() {});
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Filter info con opciones de ordenamiento
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '${filteredGames.length} juegos',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF9999AA),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              showModalBottomSheet(
+                                context: context,
+                                backgroundColor: const Color(0xFF1A1A2E),
+                                builder: (context) => Container(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text(
+                                        'Ordenar por',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      ListTile(
+                                        title: const Text(
+                                          'Tiempo jugado',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                        trailing: _sortBy == 'Tiempo jugado'
+                                            ? const Icon(
+                                                Icons.check,
+                                                color: Color(0xFF6C5FFF),
+                                              )
+                                            : null,
+                                        onTap: () {
+                                          setState(
+                                            () => _sortBy = 'Tiempo jugado',
+                                          );
+                                          Navigator.pop(context);
+                                        },
+                                      ),
+                                      ListTile(
+                                        title: const Text(
+                                          'Nombre',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                        trailing: _sortBy == 'Nombre'
+                                            ? const Icon(
+                                                Icons.check,
+                                                color: Color(0xFF6C5FFF),
+                                              )
+                                            : null,
+                                        onTap: () {
+                                          setState(() => _sortBy = 'Nombre');
+                                          Navigator.pop(context);
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                            child: const Row(
+                              children: [
+                                Icon(
+                                  Icons.tune,
+                                  color: Color(0xFF9999AA),
+                                  size: 20,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Filtrar',
+                                  style: TextStyle(
+                                    color: Color(0xFF9999AA),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      // Games Grid
+                      if (filteredGames.isEmpty)
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 40),
+                            child: Column(
+                              children: const [
+                                Icon(
+                                  Icons.search_off,
+                                  color: Color(0xFF9999AA),
+                                  size: 48,
+                                ),
+                                SizedBox(height: 16),
+                                Text(
+                                  'No se encontraron juegos',
+                                  style: TextStyle(color: Color(0xFF9999AA)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 16,
+                                childAspectRatio: 0.75,
+                              ),
+                          itemCount: filteredGames.length,
+                          itemBuilder: (context, index) {
+                            final game = filteredGames[index];
+                            return GameCard(game: game);
+                          },
+                        ),
+                      const SizedBox(height: 30),
+                    ],
                   ),
-                  const SizedBox(height: 30),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -573,13 +840,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
 class GameCard extends StatelessWidget {
   final Game game;
 
-  const GameCard({
-    super.key,
-    required this.game,
-  });
+  const GameCard({super.key, required this.game});
 
   @override
   Widget build(BuildContext context) {
+    final hoursDisplay = game.hours < 1
+        ? '${(game.hours * 60).toInt()}m'
+        : '${game.hours.toStringAsFixed(1)}h';
+
     return GestureDetector(
       onTap: () {},
       child: Column(
@@ -620,32 +888,61 @@ class GameCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                // Time badge
+                // Time badge - bottom left
                 Positioned(
                   bottom: 8,
                   left: 8,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+                      horizontal: 10,
+                      vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(4),
+                      color: const Color(0xFF6C5FFF),
+                      borderRadius: BorderRadius.circular(6),
                     ),
-                    child: Text(
-                      '⏱ ~${game.hours.toInt()}h',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.white,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.schedule,
+                          size: 12,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          hoursDisplay,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // Owned badge - top right
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Icon(
+                      Icons.check_circle,
+                      size: 16,
+                      color: Colors.white,
                     ),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           // Game title
           Text(
             game.title,
@@ -654,17 +951,14 @@ class GameCard extends StatelessWidget {
               fontWeight: FontWeight.w600,
               color: Colors.white,
             ),
-            maxLines: 1,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 4),
-          // Genres
+          // App ID (Steam ID)
           Text(
-            game.genres.join(', '),
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF9999AA),
-            ),
+            'App ID: ${game.appId}',
+            style: const TextStyle(fontSize: 11, color: Color(0xFF9999AA)),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -692,11 +986,7 @@ class ProfileScreen extends StatelessWidget {
                 color: const Color(0xFF6C5FFF),
                 borderRadius: BorderRadius.circular(40),
               ),
-              child: const Icon(
-                Icons.person,
-                color: Colors.white,
-                size: 40,
-              ),
+              child: const Icon(Icons.person, color: Colors.white, size: 40),
             ),
             const SizedBox(height: 24),
             const Text(
@@ -710,10 +1000,7 @@ class ProfileScreen extends StatelessWidget {
             const SizedBox(height: 12),
             const Text(
               'Tu información de perfil aparecerá aquí',
-              style: TextStyle(
-                fontSize: 14,
-                color: Color(0xFF9999AA),
-              ),
+              style: TextStyle(fontSize: 14, color: Color(0xFF9999AA)),
             ),
           ],
         ),
@@ -721,4 +1008,3 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 }
-
