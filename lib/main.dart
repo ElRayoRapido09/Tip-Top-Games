@@ -837,16 +837,44 @@ class _LibraryScreenState extends State<LibraryScreen> {
 }
 
 // Widget de tarjeta de juego
-class GameCard extends StatelessWidget {
+class GameCard extends StatefulWidget {
   final Game game;
 
   const GameCard({super.key, required this.game});
 
   @override
+  State<GameCard> createState() => _GameCardState();
+}
+
+class _GameCardState extends State<GameCard> {
+  late int _currentImageAttempt;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentImageAttempt = 0;
+  }
+
+  List<String> _getImageUrlCandidates() {
+    final appId = widget.game.appId;
+    return [
+      'https://cdn.akamai.steamstatic.com/steam/apps/$appId/header.jpg',
+      'https://cdn.akamai.steamstatic.com/steam/apps/$appId/capsule_467x181.jpg',
+      'https://cdn.akamai.steamstatic.com/steam/apps/$appId/capsule_231x87.jpg',
+      'https://cdn.akamai.steamstatic.com/steam/apps/$appId/library_600x900_2x.jpg',
+    ];
+  }
+
+  String get _currentImageUrl {
+    final candidates = _getImageUrlCandidates();
+    return candidates[_currentImageAttempt % candidates.length];
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final hoursDisplay = game.hours < 1
-        ? '${(game.hours * 60).toInt()}m'
-        : '${game.hours.toStringAsFixed(1)}h';
+    final hoursDisplay = widget.game.hours < 1
+        ? '${(widget.game.hours * 60).toInt()}m'
+        : '${widget.game.hours.toStringAsFixed(1)}h';
 
     return GestureDetector(
       onTap: () {},
@@ -865,27 +893,37 @@ class GameCard extends StatelessWidget {
             ),
             child: Stack(
               children: [
-                // Placeholder image
-                Container(
-                  width: double.infinity,
-                  height: double.infinity,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        const Color(0xFF6C5FFF).withOpacity(0.2),
-                        const Color(0xFF4A3FA3).withOpacity(0.2),
-                      ],
-                    ),
-                  ),
-                  child: Center(
-                    child: Icon(
-                      Icons.image_not_supported_outlined,
-                      color: const Color(0xFF9999AA).withOpacity(0.5),
-                      size: 40,
-                    ),
+                // Game image from Steam with multiple URL fallbacks
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    _currentImageUrl,
+                    width: double.infinity,
+                    height: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      // Try next URL candidate
+                      if (_currentImageAttempt <
+                          _getImageUrlCandidates().length - 1) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) {
+                            setState(() {
+                              _currentImageAttempt++;
+                            });
+                          }
+                        });
+                        return Image.network(
+                          _currentImageUrl,
+                          width: double.infinity,
+                          height: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return _buildPlaceholder();
+                          },
+                        );
+                      }
+                      return _buildPlaceholder();
+                    },
                   ),
                 ),
                 // Time badge - bottom left
@@ -945,7 +983,7 @@ class GameCard extends StatelessWidget {
           const SizedBox(height: 10),
           // Game title
           Text(
-            game.title,
+            widget.game.title,
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -957,12 +995,37 @@ class GameCard extends StatelessWidget {
           const SizedBox(height: 4),
           // App ID (Steam ID)
           Text(
-            'App ID: ${game.appId}',
+            'App ID: ${widget.game.appId}',
             style: const TextStyle(fontSize: 11, color: Color(0xFF9999AA)),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPlaceholder() {
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFF6C5FFF).withOpacity(0.2),
+            const Color(0xFF4A3FA3).withOpacity(0.2),
+          ],
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          color: const Color(0xFF9999AA).withOpacity(0.5),
+          size: 40,
+        ),
       ),
     );
   }

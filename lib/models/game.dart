@@ -23,7 +23,7 @@ class Game {
       appId: data['appid'] as int,
       title: data['name'] as String,
       imageUrl:
-          'https://media.steampowered.com/steamcommunity/public/images/apps/${data['appid']}/${data['img_logo_url']}.jpg',
+          'https://cdn.akamai.steamstatic.com/steam/apps/${data['appid']}/header.jpg',
       hours: (data['playtime_forever'] as int) / 60.0,
       genres: [],
     );
