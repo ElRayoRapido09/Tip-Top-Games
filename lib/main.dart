@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/steam_provider.dart';
 import 'screens/steam_login_screen.dart';
+import 'screens/recommendations_screen.dart';
 import 'models/game.dart';
 
 void main() {
@@ -149,11 +150,7 @@ class _SteamTimeHomeState extends State<SteamTimeHome> {
     // Si hay géneros seleccionados, filtrar por esos también
     if (_selectedGenres.isNotEmpty) {
       filtered = filtered
-          .where(
-            (game) =>
-                game.genres.any((g) => _selectedGenres.contains(g)) ||
-                _selectedGenres.isEmpty,
-          )
+          .where((game) => game.genres.any((g) => _selectedGenres.contains(g)))
           .toList();
     }
 
@@ -445,7 +442,22 @@ class _SteamTimeHomeState extends State<SteamTimeHome> {
                               0xFF6C5FFF,
                             ).withOpacity(0.5),
                           ),
-                          onPressed: filteredGames.isNotEmpty ? () {} : null,
+                          onPressed: filteredGames.isNotEmpty
+                              ? () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          RecommendationsScreen(
+                                            games: filteredGames,
+                                            availableTime: _selectedTime,
+                                            preferredGenres: _selectedGenres
+                                                .toList(),
+                                          ),
+                                    ),
+                                  );
+                                }
+                              : null,
                           child: const Text(
                             '🎮 Ver sugerencias',
                             style: TextStyle(

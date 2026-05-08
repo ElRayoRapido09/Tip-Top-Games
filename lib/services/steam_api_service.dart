@@ -10,7 +10,7 @@ class SteamApiService {
   static const String _proxyUrl = 'http://localhost:8080';
 
   // Steam API Key
-  static const String _apiKey = 'COLOCALA AQUI CAW';
+  static const String _apiKey = '';
 
   // Detectar si está en web
   static bool get _isWeb {
