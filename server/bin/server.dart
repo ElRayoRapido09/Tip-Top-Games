@@ -38,28 +38,33 @@ Future<Response> _handleRequest(Request request) async {
     return Response.ok('OK');
   }
 
-  final path = request.url.path;
+  // Obtener el path de forma más confiable
+  final path = request.requestedUri.path;
   final steamId = request.url.queryParameters['steamid'];
   final vanityUrl = request.url.queryParameters['vanityurl'];
 
+  // Log para debugging
+  print('📍 Request: ${request.method} $path');
+  print('   Query params: steamid=$steamId, vanityurl=$vanityUrl');
+
   try {
-    if (path == '/health') {
+    if (path == '/health' || path == 'health') {
       return Response.ok(jsonEncode({'status': 'ok'}));
-    } else if (path == '/library') {
+    } else if (path == '/library' || path == 'library') {
       if (steamId == null) {
         return Response.badRequest(
           body: jsonEncode({'error': 'steamid required'}),
         );
       }
       return await _getLibrary(steamId);
-    } else if (path == '/userinfo') {
+    } else if (path == '/userinfo' || path == 'userinfo') {
       if (steamId == null) {
         return Response.badRequest(
           body: jsonEncode({'error': 'steamid required'}),
         );
       }
       return await _getUserInfo(steamId);
-    } else if (path == '/vanityurl') {
+    } else if (path == '/vanityurl' || path == 'vanityurl') {
       if (vanityUrl == null) {
         return Response.badRequest(
           body: jsonEncode({'error': 'vanityurl required'}),
@@ -68,8 +73,10 @@ Future<Response> _handleRequest(Request request) async {
       return await _resolveVanityUrl(vanityUrl);
     }
 
+    print('   ❌ Route not found: $path');
     return Response.notFound(jsonEncode({'error': 'not found'}));
   } catch (e) {
+    print('   ⚠️ Error: $e');
     return Response.internalServerError(
       body: jsonEncode({'error': 'Server error: $e'}),
     );
