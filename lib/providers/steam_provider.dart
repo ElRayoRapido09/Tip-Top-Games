@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 import '../models/game.dart';
+import '../models/app_user.dart';
 import '../services/steam_auth_service.dart';
 import '../services/steam_api_service.dart';
+import '../services/database_service.dart';
 
 class SteamProvider extends ChangeNotifier {
   final SteamAuthService _authService = SteamAuthService();
   final SteamApiService _apiService = SteamApiService();
+  final DatabaseService _dbService = DatabaseService();
 
   List<Game> _games = [];
   Map<String, dynamic>? _userInfo;
   bool _isLoading = false;
   String? _error;
   String? _steamId;
+  AppUser? _appUser;
 
   // Getters
   List<Game> get games => _games;
@@ -19,7 +23,8 @@ class SteamProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   String? get steamId => _steamId;
-  bool get isAuthenticated => _steamId != null;
+  AppUser? get appUser => _appUser;
+  bool get isAuthenticated => _appUser != null && _steamId != null;
 
   /// Inicializar - comprobar si hay sesión anterior
   Future<void> initialize() async {
@@ -35,6 +40,28 @@ class SteamProvider extends ChangeNotifier {
       }
     } catch (e) {
       _error = 'Error al inicializar: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Iniciar sesión con AppUser (registro/login local)
+  Future<void> setAppUser(AppUser user) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      _appUser = user;
+      
+      // Si tiene Steam ID vinculado, cargar juegos
+      if (user.steamId != null) {
+        _steamId = user.steamId;
+        await _loadUserLibrary();
+      }
+    } catch (e) {
+      _error = 'Error al configurar usuario: $e';
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -101,6 +128,7 @@ class SteamProvider extends ChangeNotifier {
       _steamId = null;
       _games = [];
       _userInfo = null;
+      _appUser = null;
       _error = null;
     } catch (e) {
       _error = 'Error al cerrar sesión: $e';

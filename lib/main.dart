@@ -1,11 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'providers/steam_provider.dart';
-import 'screens/steam_login_screen.dart';
+import 'screens/login_screen.dart';
 import 'screens/recommendations_screen.dart';
 import 'models/game.dart';
 
 void main() {
+  // Initialize database factory
+  if (kIsWeb) {
+    databaseFactory = databaseFactoryFfiWeb;
+  } else {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+
   runApp(const MyApp());
 }
 
@@ -43,22 +54,17 @@ class AppEntry extends StatefulWidget {
 
 class _AppEntryState extends State<AppEntry> {
   @override
-  void initState() {
-    super.initState();
-    // Inicializar y verificar si hay sesión previa
-    Future.microtask(() {
-      context.read<SteamProvider>().initialize();
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Consumer<SteamProvider>(
       builder: (context, steamProvider, _) {
-        if (steamProvider.isAuthenticated) {
+        if (steamProvider.appUser != null && steamProvider.isAuthenticated) {
           return const MainNavigation();
         } else {
-          return const SteamLoginScreen();
+          return LoginScreen(
+            onLoginSuccess: (user) {
+              context.read<SteamProvider>().setAppUser(user);
+            },
+          );
         }
       },
     );

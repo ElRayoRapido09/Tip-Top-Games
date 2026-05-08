@@ -3,7 +3,7 @@ import 'package:shelf/shelf_io.dart' as io;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-const String _steamApiKey = '';
+const String _steamApiKey = 'CLAVE_STEAM_API_AQUI';
 const String _steamApiBase = 'https://api.steampowered.com';
 
 void main() async {

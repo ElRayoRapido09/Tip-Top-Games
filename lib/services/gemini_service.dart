@@ -4,7 +4,7 @@ import '../models/game.dart';
 
 class GeminiService {
   // Reemplaza esto con tu API key de Google Gemini
-  static const String _apiKey = '';
+  static const String _apiKey = 'API_GEMINI_KEY_A';
   static const String _baseUrl =
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
