@@ -1,44 +1,22 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:io' show Platform;
 import '../models/game.dart';
 
 class SteamApiService {
   // URLs
-  static const String _steamApiBase = 'https://api.steampowered.com';
   static const String _communityUrl = 'https://steamcommunity.com/profiles';
-  static const String _proxyUrl = 'http://localhost:8080';
-
-  // Steam API Key
-  static const String _apiKey = '';
-
-  // Detectar si está en web
-  static bool get _isWeb {
-    try {
-      return !Platform.isAndroid &&
-          !Platform.isIOS &&
-          !Platform.isWindows &&
-          !Platform.isMacOS &&
-          !Platform.isLinux;
-    } catch (_) {
-      return true; // Asumir web si hay error
-    }
-  }
+  static const String _configuredProxyUrl = String.fromEnvironment(
+    'STEAM_PROXY_URL',
+    defaultValue: 'http://localhost:8080',
+  );
+  static String get _proxyUrl => _configuredProxyUrl;
 
   /// Obtener la biblioteca de juegos del usuario
   Future<List<Game>> getUserLibrary(String steamId) async {
     try {
-      final url = _isWeb
-          ? Uri.parse('$_proxyUrl/library?steamid=$steamId')
-          : Uri.parse(
-              '$_steamApiBase/IPlayerService/GetOwnedGames/v1/'
-              '?steamid=$steamId'
-              '&include_appinfo=true'
-              '&include_played_free_games=true'
-              '&key=$_apiKey',
-            );
+      final url = Uri.parse('$_proxyUrl/library?steamid=$steamId');
 
-      final response = await http.get(url);
+      final response = await http.get(url).timeout(const Duration(seconds: 12));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -51,7 +29,10 @@ class SteamApiService {
             )
             .toList();
       } else {
-        throw Exception('Error al obtener biblioteca: ${response.statusCode}');
+        throw Exception(
+          'Error al obtener biblioteca (${response.statusCode}). '
+          'Verifica que el proxy Steam esté activo en $_proxyUrl',
+        );
       }
     } catch (e) {
       throw Exception('Error al conectar con Steam API: $e');
@@ -61,15 +42,9 @@ class SteamApiService {
   /// Obtener información del usuario de Steam
   Future<Map<String, dynamic>> getUserInfo(String steamId) async {
     try {
-      final url = _isWeb
-          ? Uri.parse('$_proxyUrl/userinfo?steamid=$steamId')
-          : Uri.parse(
-              '$_steamApiBase/ISteamUser/GetPlayerSummaries/v2/'
-              '?steamids=$steamId'
-              '&key=$_apiKey',
-            );
+      final url = Uri.parse('$_proxyUrl/userinfo?steamid=$steamId');
 
-      final response = await http.get(url);
+      final response = await http.get(url).timeout(const Duration(seconds: 12));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -80,7 +55,10 @@ class SteamApiService {
         }
         throw Exception('Usuario no encontrado');
       } else {
-        throw Exception('Error al obtener información del usuario');
+        throw Exception(
+          'Error al obtener información del usuario (${response.statusCode}). '
+          'Verifica que el proxy Steam esté activo en $_proxyUrl',
+        );
       }
     } catch (e) {
       throw Exception('Error al conectar con Steam API: $e');
@@ -90,15 +68,9 @@ class SteamApiService {
   /// Resolver vanity URL de Steam a Steam ID
   Future<String?> resolveVanityUrl(String vanityUrl) async {
     try {
-      final url = _isWeb
-          ? Uri.parse('$_proxyUrl/vanityurl?vanityurl=$vanityUrl')
-          : Uri.parse(
-              '$_steamApiBase/ISteamUser/ResolveVanityURL/v1/'
-              '?vanityurl=$vanityUrl'
-              '&key=$_apiKey',
-            );
+      final url = Uri.parse('$_proxyUrl/vanityurl?vanityurl=$vanityUrl');
 
-      final response = await http.get(url);
+      final response = await http.get(url).timeout(const Duration(seconds: 12));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -119,8 +91,6 @@ class SteamApiService {
 
   /// Obtener estado del servidor proxy (solo para web)
   static Future<bool> checkProxyHealth() async {
-    if (!_isWeb) return true;
-
     try {
       final response = await http
           .get(Uri.parse('$_proxyUrl/health'))

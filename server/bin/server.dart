@@ -2,18 +2,21 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as io;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:io';
 
-const String _steamApiKey = 'CLAVE_STEAM_API_AQUI';
+const String _steamApiKey = 'FE5D7F671CA58B004133A244D7ACD29F';
 const String _steamApiBase = 'https://api.steampowered.com';
 
 void main() async {
   final handler =
       logRequests().addMiddleware(_addCorsHeaders).addHandler(_handleRequest);
 
-  final server = await io.serve(handler, 'localhost', 8080);
+  final server = await io.serve(handler, InternetAddress.anyIPv4, 8080);
 
   print(
       '✅ Servidor proxy ejecutándose en: http://${server.address.host}:${server.port}');
+  print(
+      'ℹ️ Para celular real usa la IP de tu PC, ej: http://192.168.x.x:${server.port}');
   print('✅ CORS habilitado');
   print('📋 Endpoints:');
   print('   GET /health');
