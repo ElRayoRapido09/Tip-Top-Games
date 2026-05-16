@@ -19,9 +19,15 @@ class GoogleDriveService {
   }
 
   GoogleDriveService._internal() {
+    // GoogleSignIn sin clientId explícito (usa configuración del proyecto)
+    // Esto es más robusto que proporcionar un clientId hardcodeado
     _googleSignIn = GoogleSignIn(
-      scopes: [drive.DriveApi.driveScope],
-      clientId: DriveConfig.googleClientId.isNotEmpty ? DriveConfig.googleClientId : '128910010955-50npiada6hojrfej2uv450vls6s83da9.apps.googleusercontent.com',
+      scopes: [
+        drive.DriveApi.driveScope,
+        'https://www.googleapis.com/auth/drive.file',
+      ],
+      // NO proporcionar clientId aquí - dejar que Flutter lo detecte automáticamente
+      // desde la configuración del proyecto Android/iOS
     );
     
     // Si el ID de carpeta centralizada está configurado, usarlo
@@ -35,28 +41,61 @@ class GoogleDriveService {
   Future<bool> authenticate() async {
     try {
       print('🔐 Iniciando autenticación con Google...');
+      print('   📱 Plataforma: ${Platform.isAndroid ? "Android" : Platform.isIOS ? "iOS" : "Escritorio"}');
       
+      // Primero verificar si ya hay una sesión activa
+      final currentUser = _googleSignIn.currentUser;
+      if (currentUser != null) {
+        print('✅ Ya existe una sesión activa: ${currentUser.email}');
+        
+        // Obtener token de acceso
+        try {
+          final auth = await currentUser.authentication;
+          final accessToken = auth.accessToken;
+          
+          if (accessToken != null) {
+            final httpClient = _AuthenticatedHttpClient(accessToken);
+            _driveApi = drive.DriveApi(httpClient);
+            print('✅ DriveApi inicializada con sesión existente');
+            return true;
+          }
+        } catch (e) {
+          print('⚠️ Error al obtener token de sesión existente: $e');
+          // Continuar con el flujo normal de signIn
+        }
+      }
+
+      // Intentar signIn
+      print('🔄 Iniciando flujo de autenticación...');
       final account = await _googleSignIn.signIn();
+      
       if (account == null) {
         print('⚠️ El usuario canceló la autenticación');
         return false;
       }
 
       print('✅ Usuario autenticado: ${account.email}');
+      print('   - Nombre: ${account.displayName}');
 
+      // Obtener autenticación
+      print('🔄 Obteniendo credenciales de acceso...');
       final auth = await account.authentication;
       final accessToken = auth.accessToken;
+      final idToken = auth.idToken;
 
       if (accessToken == null) {
         print('❌ No se pudo obtener access token');
-        print('📝 Verifica que:');
-        print('   1. Las credenciales OAuth están configuradas correctamente');
-        print('   2. Tu cuenta de Google tiene permiso para acceder a Drive');
-        print('   3. La aplicación tiene permisos de Drive API');
+        print('📝 Posibles causas:');
+        print('   1. El usuario rechazó los permisos');
+        print('   2. Hay un problema con la configuración OAuth de Google');
+        print('   3. La aplicación no tiene permisos de Drive API');
+        print('   4. El dispositivo no tiene Google Play Services actualizado (Android)');
         return false;
       }
 
       print('✅ Access token obtenido');
+      print('   - Token tipo: Bearer');
+      print('   - Tiene idToken: ${idToken != null ? "Sí" : "No"}');
 
       // Crear Drive API con cliente autenticado
       final httpClient = _AuthenticatedHttpClient(accessToken);
@@ -66,13 +105,22 @@ class GoogleDriveService {
       
       return true;
     } on Exception catch (e) {
-      print('❌ Error en autenticación Google: $e');
-      print('📝 Detalles del error:');
-      print('   - Tipo: ${e.runtimeType}');
-      print('   - Mensaje: ${e.toString()}');
+      print('❌ Error en autenticación Google (Exception): $e');
+      print('📝 Tipo de error: ${e.runtimeType}');
+      print('📝 Detalles: ${e.toString()}');
+      
+      if (e.toString().contains('PlatformException')) {
+        print('⚠️ Error de plataforma detectado');
+        print('   Posibles soluciones:');
+        print('   1. Verifica que Google Play Services está instalado');
+        print('   2. Verifica la configuración de OAuth en Firebase/Google Cloud');
+        print('   3. Asegúrate que el SHA-1 del certificado está registrado');
+      }
+      
       return false;
     } catch (e) {
       print('❌ Error inesperado en autenticación: $e');
+      print('📝 Tipo: ${e.runtimeType}');
       return false;
     }
   }

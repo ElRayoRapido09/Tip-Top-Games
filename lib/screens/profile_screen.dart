@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:image_picker/image_picker.dart';
 import '../providers/steam_provider.dart';
-import '../services/google_drive_service.dart';
-import '../services/database_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -48,220 +45,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  void _showChangePhotoDialog() async {
-    final googleDrive = GoogleDriveService();
 
-    try {
-      // Verificar y autenticar con Google Drive
-      if (!googleDrive.isAuthenticated) {
-        print('⏳ Autenticando con Google Drive...');
-        final authenticated = await googleDrive.authenticate();
-        if (!authenticated) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('❌ No se pudo autenticar con Google Drive'),
-              duration: Duration(seconds: 3),
-            ),
-          );
-          return;
-        }
-      }
-
-      // Buscar la carpeta central si no está configurada
-      if (googleDrive.centralFolderId == null) {
-        print('🔍 Buscando carpeta centralizada...');
-        final folderId = await googleDrive.searchFolderByName('Tip-Top-Games-Fotos');
-
-        if (folderId != null) {
-          googleDrive.setCentralFolderId(folderId);
-          print('✅ Carpeta centralizada encontrada: $folderId');
-        } else {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⚠️ No se encontró la carpeta. Crea una carpeta llamada "Tip-Top-Games-Fotos" en tu Drive'),
-              duration: Duration(seconds: 4),
-            ),
-          );
-          return;
-        }
-      }
-
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: const Color(0xFF1A1A2E),
-          title: const Text(
-            'Cambiar foto de perfil',
-            style: TextStyle(color: Colors.white),
-          ),
-          content: const Text(
-            '¿Cómo deseas cargar tu foto?',
-            style: TextStyle(color: Color(0xFF9999AA)),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _pickAndUploadImage(ImageSource.camera);
-              },
-              child: const Text('Cámara'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _pickAndUploadImage(ImageSource.gallery);
-              },
-              child: const Text('Galería'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar'),
-            ),
-          ],
-        ),
-      );
-    } catch (e) {
-      print('❌ Error al preparar cambio de foto: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Error: $e'),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _pickAndUploadImage(ImageSource source) async {
-    try {
-      final imagePicker = ImagePicker();
-      final pickedFile = await imagePicker.pickImage(source: source);
-
-      if (pickedFile == null) return;
-
-      // Mostrar loading
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => Center(
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1A1A2E),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(
-                  width: 50,
-                  height: 50,
-                  child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6C5FFF)),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Subiendo imagen...',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-
-      // Obtener usuario actual
-      final provider = context.read<SteamProvider>();
-      final user = provider.appUser;
-
-      if (user == null) {
-        if (mounted) {
-          Navigator.pop(context); // Cerrar loading
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Error: Usuario no encontrado'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return;
-      }
-
-      // Inicializar Google Drive
-      final googleDrive = GoogleDriveService();
-      final isAuthenticated = await googleDrive.checkAuthentication();
-
-      if (!isAuthenticated) {
-        final authenticated = await googleDrive.authenticate();
-        if (!authenticated) {
-          if (mounted) {
-            Navigator.pop(context); // Cerrar loading
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Error: No se pudo autenticar con Google'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-          return;
-        }
-      }
-
-      // Subir imagen a Google Drive
-      final imageUrl = await googleDrive.uploadProfileImage(
-        gameUser: user.gameUser,
-        filePath: pickedFile.path,
-        fileName: 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg',
-      );
-
-      if (imageUrl == null) {
-        if (mounted) {
-          Navigator.pop(context); // Cerrar loading
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Error al subir la imagen'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return;
-      }
-
-      // Guardar URL en la base de datos
-      final db = DatabaseService();
-      await db.updateUserProfileImage(user.id!, imageUrl);
-
-      // Actualizar provider
-      await provider.refreshProfile();
-
-      if (mounted) {
-        Navigator.pop(context); // Cerrar loading
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Foto de perfil actualizada'),
-            backgroundColor: Color(0xFF6C5FFF),
-          ),
-        );
-      }
-    } catch (e) {
-      print('Error al subir imagen: $e');
-      if (mounted) {
-        Navigator.pop(context); // Cerrar loading
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -293,6 +77,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final countryCode = steamInfo?['loccountrycode'] as String?;
           final realName = steamInfo?['realname'] as String?;
           final steamName = steamInfo?['personaname'] as String?;
+          final steamAvatar = steamInfo?['avatarfull'] as String?;
 
           return RefreshIndicator(
             color: const Color(0xFF6C5FFF),
@@ -306,8 +91,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _ProfileHeader(
                     displayName: displayName,
                     subtitle: user.email,
-                    profileImageUrl: user.profileImageUrl,
-                    onChangePhoto: _showChangePhotoDialog,
+                    steamAvatarUrl: steamAvatar,
                     onRefresh: provider.refreshProfile,
                   ),
                   Padding(
@@ -456,15 +240,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 class _ProfileHeader extends StatelessWidget {
   final String displayName;
   final String subtitle;
-  final String? profileImageUrl;
-  final VoidCallback onChangePhoto;
+  final String? steamAvatarUrl;
   final VoidCallback onRefresh;
 
   const _ProfileHeader({
     required this.displayName,
     required this.subtitle,
-    this.profileImageUrl,
-    required this.onChangePhoto,
+    this.steamAvatarUrl,
     required this.onRefresh,
   });
 
@@ -534,36 +316,13 @@ class _ProfileHeader extends StatelessWidget {
                   ],
                 ),
                 child: ClipOval(
-                  child: profileImageUrl != null && profileImageUrl!.isNotEmpty
+                  child: steamAvatarUrl != null && steamAvatarUrl!.isNotEmpty
                       ? Image.network(
-                          profileImageUrl!,
+                          steamAvatarUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _AvatarFallback(
-                            name: displayName,
-                          ),
+                          errorBuilder: (_, __, ___) => _AvatarFallback(name: displayName),
                         )
                       : _AvatarFallback(name: displayName),
-                ),
-              ),
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: GestureDetector(
-                  onTap: onChangePhoto,
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF6C5FFF),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFF0F0F1E), width: 2),
-                    ),
-                    child: const Icon(
-                      Icons.camera_alt,
-                      size: 16,
-                      color: Colors.white,
-                    ),
-                  ),
                 ),
               ),
             ],
