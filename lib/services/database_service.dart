@@ -34,8 +34,9 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 3,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -49,7 +50,7 @@ class DatabaseService {
         email TEXT UNIQUE NOT NULL,
         passwordHash TEXT NOT NULL,
         steamId TEXT,
-        gamingPlatforms TEXT,
+        profileImageUrl TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       )
@@ -71,6 +72,42 @@ class DatabaseService {
     ''');
   }
 
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE users RENAME TO users_old');
+      await db.execute('''
+        CREATE TABLE users(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          gameUser TEXT UNIQUE NOT NULL,
+          email TEXT UNIQUE NOT NULL,
+          passwordHash TEXT NOT NULL,
+          steamId TEXT,
+          profileImageUrl TEXT,
+          createdAt TEXT NOT NULL,
+          updatedAt TEXT NOT NULL
+        )
+      ''');
+      await db.execute('''
+        INSERT INTO users (id, gameUser, email, passwordHash, steamId, profileImageUrl, createdAt, updatedAt)
+        SELECT id, gameUser, email, passwordHash, steamId, NULL, createdAt, updatedAt
+        FROM users_old
+      ''');
+      await db.execute('DROP TABLE users_old');
+    }
+    
+    if (oldVersion < 3) {
+      // Agregar columna profileImageUrl si no existe (para base de datos versión 2)
+      try {
+        await db.execute('ALTER TABLE users ADD COLUMN profileImageUrl TEXT');
+      } catch (e) {
+        // Si la columna ya existe, ignorar el error
+        if (!e.toString().contains('duplicate column name')) {
+          rethrow;
+        }
+      }
+    }
+  }
+
   // ==================== USUARIO ====================
 
   /// Crear nuevo usuario
@@ -78,7 +115,6 @@ class DatabaseService {
     required String gameUser,
     required String email,
     required String password,
-    required List<String> gamingPlatforms,
   }) async {
     final db = await database;
     final passwordHash = _hashPassword(password);
@@ -88,13 +124,12 @@ class DatabaseService {
       gameUser: gameUser,
       email: email,
       passwordHash: passwordHash,
-      gamingPlatforms: gamingPlatforms,
       createdAt: now,
       updatedAt: now,
     );
 
     final id = await db.insert('users', user.toMap());
-    return user.copyWith(id: id as int);
+    return user.copyWith(id: id);
   }
 
   /// Obtener usuario por gameUser
@@ -167,16 +202,13 @@ class DatabaseService {
     );
   }
 
-  /// Actualizar plataformas de juego
-  Future<void> updateGamingPlatforms(
-    int userId,
-    List<String> platforms,
-  ) async {
+  /// Actualizar foto de perfil
+  Future<void> updateUserProfileImage(int userId, String profileImageUrl) async {
     final db = await database;
     await db.update(
       'users',
       {
-        'gamingPlatforms': platforms.join(','),
+        'profileImageUrl': profileImageUrl,
         'updatedAt': DateTime.now().toIso8601String(),
       },
       where: 'id = ?',
@@ -208,7 +240,7 @@ class DatabaseService {
     );
 
     final id = await db.insert('chat_history', chat.toMap());
-    return chat.copyWith(id: id as int);
+    return chat.copyWith(id: id);
   }
 
   /// Obtener historial de chats del usuario

@@ -84,25 +84,27 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: const Color(0xFF0F0F1E),
       body: SafeArea(
         child: SingleChildScrollView(
-          child: SizedBox(
-            height:
-                MediaQuery.of(context).size.height -
-                    MediaQuery.of(context).padding.top -
-                    MediaQuery.of(context).padding.bottom,
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Logo/Header
-                  const Spacer(),
-                  const Text(
+          padding: EdgeInsets.symmetric(
+            horizontal: MediaQuery.sizeOf(context).width * 0.06,
+            vertical: 24,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: MediaQuery.sizeOf(context).height -
+                  MediaQuery.paddingOf(context).vertical -
+                  48,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                  Text(
                     '🎮 Tip-Top Games',
                     style: TextStyle(
-                      fontSize: 32,
+                      fontSize: (MediaQuery.sizeOf(context).width * 0.08)
+                          .clamp(24.0, 32.0),
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF6C5FFF),
+                      color: const Color(0xFF6C5FFF),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -306,13 +308,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ],
                   ),
-                  const Spacer(),
                 ],
               ),
             ),
           ),
         ),
-      ),
     );
   }
 }

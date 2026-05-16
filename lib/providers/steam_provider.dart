@@ -26,6 +26,11 @@ class SteamProvider extends ChangeNotifier {
   AppUser? get appUser => _appUser;
   bool get isAuthenticated => _appUser != null && _steamId != null;
 
+  int get gamesCount => _games.length;
+
+  double get totalPlaytimeHours =>
+      _games.fold<double>(0, (sum, game) => sum + game.hours);
+
   /// Inicializar - comprobar si hay sesión anterior
   Future<void> initialize() async {
     _isLoading = true;
@@ -55,9 +60,10 @@ class SteamProvider extends ChangeNotifier {
     try {
       _appUser = user;
       
-      // Si tiene Steam ID vinculado, cargar juegos
+      // Si tiene Steam ID vinculado, cargar perfil y biblioteca
       if (user.steamId != null) {
         _steamId = user.steamId;
+        await _loadSteamProfile();
         await _loadUserLibrary();
       }
     } catch (e) {
@@ -101,6 +107,46 @@ class SteamProvider extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Refrescar datos del perfil (cuenta local + Steam + biblioteca)
+  Future<void> refreshProfile() async {
+    if (_appUser?.id == null) return;
+
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final freshUser = await _dbService.getUserById(_appUser!.id!);
+      if (freshUser != null) {
+        _appUser = freshUser;
+        _steamId = freshUser.steamId;
+      }
+
+      if (_steamId != null) {
+        await _loadSteamProfile();
+        await _loadUserLibrary();
+      } else {
+        _userInfo = null;
+        _games = [];
+      }
+    } catch (e) {
+      _error = 'Error al actualizar perfil: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _loadSteamProfile() async {
+    if (_steamId == null) return;
+
+    try {
+      _userInfo = await _apiService.getUserInfo(_steamId!);
+    } catch (e) {
+      _error = 'Error al cargar perfil de Steam: $e';
     }
   }
 

@@ -5,8 +5,30 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'providers/steam_provider.dart';
 import 'screens/login_screen.dart';
+import 'screens/profile_screen.dart';
 import 'screens/recommendations_screen.dart';
+import 'screens/game_detail_screen.dart';
 import 'models/game.dart';
+
+/// Tamaños adaptados al ancho de pantalla del dispositivo.
+class _Layout {
+  _Layout(BuildContext context)
+      : width = MediaQuery.sizeOf(context).width,
+        height = MediaQuery.sizeOf(context).height,
+        padding = MediaQuery.paddingOf(context);
+
+  final double width;
+  final double height;
+  final EdgeInsets padding;
+
+  double get horizontal => (width * 0.045).clamp(12.0, 24.0);
+  double get titleSize => (width * 0.075).clamp(22.0, 32.0);
+  double get subtitleSize => (width * 0.034).clamp(12.0, 14.0);
+  double get circleSize => (width * 0.48).clamp(140.0, 220.0);
+  double get circleNumberSize => (width * 0.14).clamp(40.0, 60.0);
+  int get gridColumns => width >= 600 ? 3 : 2;
+  double get gridAspectRatio => width < 360 ? 0.68 : 0.75;
+}
 
 void main() {
   // Initialize database factory
@@ -32,6 +54,7 @@ class MyApp extends StatelessWidget {
       providers: [ChangeNotifierProvider(create: (_) => SteamProvider())],
       child: MaterialApp(
         title: 'Tip-Top Games',
+        debugShowCheckedModeBanner: false,
         theme: ThemeData(
           brightness: Brightness.dark,
           useMaterial3: true,
@@ -82,15 +105,84 @@ class MainNavigation extends StatefulWidget {
   State<MainNavigation> createState() => _MainNavigationState();
 }
 
-class _MainNavigationState extends State<MainNavigation> {
+class _MainNavigationState extends State<MainNavigation>
+    with TickerProviderStateMixin {
   int _selectedIndex = 0;
+  late AnimationController _pageAnimationController;
+  late AnimationController _navAnimationController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+
+  final List<Widget> _pages = const [
+    SteamTimeHome(),
+    LibraryScreen(),
+    ProfileScreen(),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Controlador para transición de páginas
+    _pageAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+
+    // Controlador para animación de navbar
+    _navAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+
+    // Fade para la página
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _pageAnimationController, curve: Curves.easeOut),
+    );
+
+    // Slide para la página
+    _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero)
+        .animate(
+          CurvedAnimation(parent: _pageAnimationController, curve: Curves.easeOutCubic),
+        );
+
+    _pageAnimationController.forward();
+    _navAnimationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _pageAnimationController.dispose();
+    _navAnimationController.dispose();
+    super.dispose();
+  }
+
+  void _onNavItemTapped(int index) {
+    if (index != _selectedIndex) {
+      // Resetear animación de página
+      _pageAnimationController.reset();
+
+      setState(() {
+        _selectedIndex = index;
+      });
+
+      // Reiniciar animación
+      _pageAnimationController.forward();
+
+      // Pequeña animación del navbar
+      _navAnimationController.forward(from: 0.0);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: const [SteamTimeHome(), LibraryScreen(), ProfileScreen()],
+      body: FadeTransition(
+        opacity: _fadeAnimation,
+        child: SlideTransition(
+          position: _slideAnimation,
+          child: _pages[_selectedIndex],
+        ),
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -98,24 +190,106 @@ class _MainNavigationState extends State<MainNavigation> {
             top: BorderSide(color: const Color(0xFF6C5FFF).withOpacity(0.2)),
           ),
         ),
-        child: BottomNavigationBar(
-          backgroundColor: const Color(0xFF0F0F1E),
-          type: BottomNavigationBarType.fixed,
+        child: _AnimatedBottomNavBar(
           currentIndex: _selectedIndex,
-          selectedItemColor: const Color(0xFF6C5FFF),
-          unselectedItemColor: const Color(0xFF9999AA),
-          onTap: (index) {
-            setState(() {
-              _selectedIndex = index;
-            });
-          },
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home), label: ''),
-            BottomNavigationBarItem(icon: Icon(Icons.library_books), label: ''),
-            BottomNavigationBarItem(icon: Icon(Icons.person), label: ''),
-          ],
+          onTap: _onNavItemTapped,
+          animationController: _navAnimationController,
         ),
       ),
+    );
+  }
+}
+
+// Widget personalizado para la barra de navegación animada
+class _AnimatedBottomNavBar extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+  final AnimationController animationController;
+
+  const _AnimatedBottomNavBar({
+    required this.currentIndex,
+    required this.onTap,
+    required this.animationController,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return BottomNavigationBar(
+      backgroundColor: const Color(0xFF0F0F1E),
+      type: BottomNavigationBarType.fixed,
+      currentIndex: currentIndex,
+      selectedItemColor: const Color(0xFF6C5FFF),
+      unselectedItemColor: const Color(0xFF9999AA),
+      onTap: onTap,
+      items: [
+        _buildNavItem(
+          icon: Icons.home,
+          index: 0,
+          isSelected: currentIndex == 0,
+        ),
+        _buildNavItem(
+          icon: Icons.library_books,
+          index: 1,
+          isSelected: currentIndex == 1,
+        ),
+        _buildNavItem(
+          icon: Icons.person,
+          index: 2,
+          isSelected: currentIndex == 2,
+        ),
+      ],
+    );
+  }
+
+  BottomNavigationBarItem _buildNavItem({
+    required IconData icon,
+    required int index,
+    required bool isSelected,
+  }) {
+    return BottomNavigationBarItem(
+      icon: _AnimatedNavIcon(
+        icon: icon,
+        isSelected: isSelected,
+        animationController: animationController,
+      ),
+      label: '',
+    );
+  }
+}
+
+// Widget para animar el icono individual
+class _AnimatedNavIcon extends StatelessWidget {
+  final IconData icon;
+  final bool isSelected;
+  final AnimationController animationController;
+
+  const _AnimatedNavIcon({
+    required this.icon,
+    required this.isSelected,
+    required this.animationController,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Solo animar si está seleccionado
+    if (!isSelected) {
+      return Icon(icon);
+    }
+
+    // Animación de scale para el icono seleccionado
+    final scaleAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
+      CurvedAnimation(parent: animationController, curve: Curves.elasticOut),
+    );
+
+    return AnimatedBuilder(
+      animation: scaleAnimation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: scaleAnimation.value,
+          child: child,
+        );
+      },
+      child: Icon(icon),
     );
   }
 }
@@ -139,18 +313,6 @@ class _SteamTimeHomeState extends State<SteamTimeHome> {
     'RPG',
     'Plataformas',
   ];
-
-  String _getTimeLabel(double value) {
-    if (value <= 30) {
-      return '10m';
-    } else if (value <= 60) {
-      return '${value.toInt()}m';
-    } else if (value <= 120) {
-      return '${(value / 60).toStringAsFixed(1)}h';
-    } else {
-      return '2h+';
-    }
-  }
 
   List<Game> _getFilteredGames(SteamProvider provider) {
     // Obtener juegos filtrados por tiempo
@@ -180,79 +342,59 @@ class _SteamTimeHomeState extends State<SteamTimeHome> {
           }
 
           final filteredGames = _getFilteredGames(steamProvider);
+          final layout = _Layout(context);
 
-          return SingleChildScrollView(
-            child: Column(
-              children: [
-                // Header
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 20,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
+          return SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      layout.horizontal,
+                      16,
+                      layout.horizontal,
+                      8,
+                    ),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
                         'Tip-Top Games',
                         style: TextStyle(
-                          fontSize: 18,
+                          fontSize: layout.titleSize * 0.6,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
                       ),
-                      GestureDetector(
-                        onTap: () {
-                          context.read<SteamProvider>().logout();
-                        },
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF6C5FFF),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Icon(
-                            Icons.logout,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-                // Main content
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Question
-                      const Text(
-                        '¿Cuánto tiempo\ntienes hoy?',
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          height: 1.2,
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: layout.horizontal),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '¿Cuánto tiempo\ntienes hoy?',
+                          style: TextStyle(
+                            fontSize: layout.titleSize,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            height: 1.2,
+                          ),
                         ),
-                      ),
                       const SizedBox(height: 8),
                       // Subtitle
-                      Text(
-                        'Elige tiempo y género para encontrar sugerencias en tu biblioteca (${steamProvider.games.length} juegos)',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF9999AA),
+                        Text(
+                          'Elige tiempo y género para encontrar sugerencias en tu biblioteca (${steamProvider.games.length} juegos)',
+                          style: TextStyle(
+                            fontSize: layout.subtitleSize,
+                            color: const Color(0xFF9999AA),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 32),
-                      // Time display circle
-                      Center(
-                        child: Container(
-                          width: 200,
-                          height: 200,
+                        SizedBox(height: layout.height * 0.025),
+                        Center(
+                          child: Container(
+                            width: layout.circleSize,
+                            height: layout.circleSize,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: LinearGradient(
@@ -274,8 +416,8 @@ class _SteamTimeHomeState extends State<SteamTimeHome> {
                               children: [
                                 Text(
                                   '${_selectedTime.toInt()}',
-                                  style: const TextStyle(
-                                    fontSize: 60,
+                                  style: TextStyle(
+                                    fontSize: layout.circleNumberSize,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                   ),
@@ -476,11 +618,12 @@ class _SteamTimeHomeState extends State<SteamTimeHome> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 30),
-                    ],
+                        SizedBox(height: layout.height * 0.03),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },
@@ -612,63 +755,43 @@ class _LibraryScreenState extends State<LibraryScreen> {
             0,
             (sum, game) => sum + game.hours,
           );
+          final layout = _Layout(context);
 
-          return SingleChildScrollView(
-            child: Column(
-              children: [
-                // Header
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 20,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Tu Biblioteca',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${games.length} juegos • ${totalHours.toStringAsFixed(1)}h totales',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF9999AA),
-                            ),
-                          ),
-                        ],
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          context.read<SteamProvider>().logout();
-                        },
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF6C5FFF),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Icon(
-                            Icons.logout,
+          return SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      layout.horizontal,
+                      16,
+                      layout.horizontal,
+                      8,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Tu Biblioteca',
+                          style: TextStyle(
+                            fontSize: layout.titleSize * 0.65,
+                            fontWeight: FontWeight.bold,
                             color: Colors.white,
-                            size: 20,
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          '${games.length} juegos • ${totalHours.toStringAsFixed(1)}h totales',
+                          style: TextStyle(
+                            fontSize: layout.subtitleSize,
+                            color: const Color(0xFF9999AA),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: layout.horizontal),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -832,11 +955,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 2,
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: layout.gridColumns,
                                 crossAxisSpacing: 12,
                                 mainAxisSpacing: 16,
-                                childAspectRatio: 0.75,
+                                childAspectRatio: layout.gridAspectRatio,
                               ),
                           itemCount: filteredGames.length,
                           itemBuilder: (context, index) {
@@ -844,12 +967,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             return GameCard(game: game);
                           },
                         ),
-                      const SizedBox(height: 30),
+                      SizedBox(height: layout.height * 0.03),
                     ],
                   ),
                 ),
               ],
             ),
+          ),
           );
         },
       ),
@@ -896,15 +1020,27 @@ class _GameCardState extends State<GameCard> {
     final hoursDisplay = widget.game.hours < 1
         ? '${(widget.game.hours * 60).toInt()}m'
         : '${widget.game.hours.toStringAsFixed(1)}h';
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final imageHeight = (constraints.maxWidth * 1.15).clamp(100.0, 180.0);
 
-    return GestureDetector(
-      onTap: () {},
-      child: Column(
+        return GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => GameDetailScreen(
+                  game: widget.game,
+                ),
+              ),
+            );
+          },
+          child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: double.infinity,
-            height: 160,
+            height: imageHeight,
             decoration: BoxDecoration(
               color: const Color(0xFF1A1A2E),
               borderRadius: BorderRadius.circular(8),
@@ -1024,6 +1160,8 @@ class _GameCardState extends State<GameCard> {
         ],
       ),
     );
+      },
+    );
   }
 
   Widget _buildPlaceholder() {
@@ -1046,47 +1184,6 @@ class _GameCardState extends State<GameCard> {
           Icons.image_not_supported_outlined,
           color: const Color(0xFF9999AA).withOpacity(0.5),
           size: 40,
-        ),
-      ),
-    );
-  }
-}
-
-// Pantalla de Perfil (placeholder)
-class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: const Color(0xFF6C5FFF),
-                borderRadius: BorderRadius.circular(40),
-              ),
-              child: const Icon(Icons.person, color: Colors.white, size: 40),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Mi Perfil',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Tu información de perfil aparecerá aquí',
-              style: TextStyle(fontSize: 14, color: Color(0xFF9999AA)),
-            ),
-          ],
         ),
       ),
     );

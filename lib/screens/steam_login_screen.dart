@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/steam_provider.dart';
@@ -22,6 +23,10 @@ class _SteamLoginScreenState extends State<SteamLoginScreen> {
   }
 
   Future<void> _checkProxyHealth() async {
+    if (!kIsWeb) {
+      setState(() => _proxyHealthy = true);
+      return;
+    }
     final healthy = await SteamApiService.checkProxyHealth();
     setState(() {
       _proxyHealthy = healthy;

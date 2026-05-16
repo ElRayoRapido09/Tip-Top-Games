@@ -19,18 +19,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   bool _isLoading = false;
   String? _error;
-  final Set<String> _selectedPlatforms = {};
-  String? _linkedSteamId;
   AppUser? _createdUser;
   final _steamApiService = SteamApiService();
-
-  final List<String> _availablePlatforms = [
-    'PC',
-    'PlayStation',
-    'Xbox',
-    'Nintendo Switch',
-    'Mobile',
-  ];
 
   @override
   void dispose() {
@@ -78,11 +68,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return false;
     }
 
-    if (_selectedPlatforms.isEmpty) {
-      _setError('Selecciona al menos una plataforma');
-      return false;
-    }
-
     return true;
   }
 
@@ -124,10 +109,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
         gameUser: _gameUserController.text.trim(),
         email: _emailController.text.trim(),
         password: _passwordController.text,
-        gamingPlatforms: _selectedPlatforms.toList(),
       );
 
       setState(() => _createdUser = user);
+
+      // Nota: La carpeta de Google Drive será creada automáticamente cuando el usuario
+      // suba su primera imagen de perfil (si existe una carpeta centralizada configurada)
 
       // Mostrar pantalla de vinculación de Steam
       if (mounted) {
@@ -151,7 +138,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         onSteamLinked: (steamId) async {
           if (_createdUser != null) {
             await DatabaseService().linkSteamId(_createdUser!.id!, steamId);
-            setState(() => _linkedSteamId = steamId);
 
             if (mounted) {
               Navigator.pop(context); // Cerrar diálogo
@@ -415,55 +401,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                         ),
                         style: const TextStyle(color: Colors.white),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Platforms
-                      const Text(
-                        'Plataformas de Juego',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children:
-                            _availablePlatforms.map((platform) {
-                          final isSelected = _selectedPlatforms.contains(platform);
-                          return FilterChip(
-                            label: Text(platform),
-                            selected: isSelected,
-                            onSelected: (selected) {
-                              setState(() {
-                                if (selected) {
-                                  _selectedPlatforms.add(platform);
-                                } else {
-                                  _selectedPlatforms.remove(platform);
-                                }
-                              });
-                            },
-                            backgroundColor:
-                                const Color(0xFF1A1A2E),
-                            selectedColor:
-                                const Color(0xFF6C5FFF),
-                            labelStyle: TextStyle(
-                              color: isSelected
-                                  ? Colors.white
-                                  : const Color(0xFF9999AA),
-                              fontSize: 12,
-                            ),
-                            side: BorderSide(
-                              color: isSelected
-                                  ? const Color(0xFF6C5FFF)
-                                  : const Color(0xFF6C5FFF)
-                                      .withOpacity(0.3),
-                            ),
-                          );
-                        }).toList(),
                       ),
                       const SizedBox(height: 32),
 

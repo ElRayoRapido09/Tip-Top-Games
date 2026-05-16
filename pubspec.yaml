@@ -44,6 +44,9 @@ dependencies:
   sqflite_common_ffi_web: ^0.4.0
   sqlite3_flutter_libs: ^0.5.0
   crypto: ^3.0.3
+  google_sign_in: ^6.1.0
+  googleapis: ^11.4.0
+  image_picker: ^1.0.0
 
 dev_dependencies:
   flutter_test:
@@ -60,7 +63,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - .dart_tool/sqflite_common_ffi_web/
+    - assets/credentials/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

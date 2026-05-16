@@ -4,7 +4,7 @@ class AppUser {
   final String email;
   final String passwordHash;
   final String? steamId;
-  final List<String> gamingPlatforms;
+  final String? profileImageUrl;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -14,12 +14,11 @@ class AppUser {
     required this.email,
     required this.passwordHash,
     this.steamId,
-    required this.gamingPlatforms,
+    this.profileImageUrl,
     required this.createdAt,
     required this.updatedAt,
   });
 
-  /// Convertir a mapa para SQLite
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -27,13 +26,12 @@ class AppUser {
       'email': email,
       'passwordHash': passwordHash,
       'steamId': steamId,
-      'gamingPlatforms': gamingPlatforms.join(','), // Guardar como string separado por comas
+      'profileImageUrl': profileImageUrl,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
   }
 
-  /// Crear desde mapa de SQLite
   factory AppUser.fromMap(Map<String, dynamic> map) {
     return AppUser(
       id: map['id'] as int?,
@@ -41,20 +39,19 @@ class AppUser {
       email: map['email'] as String,
       passwordHash: map['passwordHash'] as String,
       steamId: map['steamId'] as String?,
-      gamingPlatforms: (map['gamingPlatforms'] as String?)?.split(',') ?? [],
+      profileImageUrl: map['profileImageUrl'] as String?,
       createdAt: DateTime.parse(map['createdAt'] as String),
       updatedAt: DateTime.parse(map['updatedAt'] as String),
     );
   }
 
-  /// Copiar con modificaciones
   AppUser copyWith({
     int? id,
     String? gameUser,
     String? email,
     String? passwordHash,
     String? steamId,
-    List<String>? gamingPlatforms,
+    String? profileImageUrl,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -64,7 +61,7 @@ class AppUser {
       email: email ?? this.email,
       passwordHash: passwordHash ?? this.passwordHash,
       steamId: steamId ?? this.steamId,
-      gamingPlatforms: gamingPlatforms ?? this.gamingPlatforms,
+      profileImageUrl: profileImageUrl ?? this.profileImageUrl,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
