@@ -121,8 +121,19 @@ start_server.bat  # Windows
 
 ### Error: CORS origin
 
-- Verifica que el servidor proxy esté corriendo en `http://localhost:8080`
-- Intenta acceder a http://localhost:8080/health en el navegador
+- Verifica que el servidor proxy esté corriendo en `http://localhost:8765`
+- Intenta acceder a http://localhost:8765/health en el navegador
+
+### Error: `errno = 10013` al iniciar el proxy (Windows)
+
+Windows reserva rangos de puertos (Hyper-V, WSL, Docker). Si el **8080** está en un rango excluido, el servidor no puede abrirlo. Este proyecto usa el puerto **8765** por defecto. Para otro puerto:
+
+```powershell
+$env:STEAM_PROXY_PORT="9000"
+dart run server/bin/server.dart
+```
+
+Y en Flutter: `flutter run -d chrome --dart-define=STEAM_PROXY_URL=http://localhost:9000`
 
 ## 📚 Documentación Adicional
 

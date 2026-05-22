@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/game.dart';
+import '../models/game_details.dart';
+import '../providers/steam_provider.dart';
+import '../services/steam_api_service.dart';
 
 class GameDetailScreen extends StatefulWidget {
   final Game game;
+  final String? steamId;
   final Offset? tapPosition;
 
   const GameDetailScreen({
     super.key,
     required this.game,
+    this.steamId,
     this.tapPosition,
   });
 
@@ -21,6 +27,11 @@ class _GameDetailScreenState extends State<GameDetailScreen>
   late Animation<double> _scaleAnimation;
   late Animation<Offset> _slideAnimation;
   late Animation<double> _fadeAnimation;
+
+  final _steamApi = SteamApiService();
+  GameExtendedDetails? _extendedDetails;
+  bool _loadingDetails = false;
+  bool _showAllAchievements = false;
 
   @override
   void initState() {
@@ -48,6 +59,35 @@ class _GameDetailScreenState extends State<GameDetailScreen>
     );
 
     _animationController.forward();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadExtendedDetails();
+    });
+  }
+
+  Future<void> _loadExtendedDetails() async {
+    final steamId =
+        widget.steamId ?? context.read<SteamProvider>().steamId;
+    if (steamId == null) return;
+
+    setState(() => _loadingDetails = true);
+    try {
+      final details = await _steamApi.getGameExtendedDetails(
+        steamId: steamId,
+        appId: widget.game.appId,
+      );
+      if (mounted) setState(() => _extendedDetails = details);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _extendedDetails = GameExtendedDetails(
+            achievementsNote: 'Error al cargar datos: $e',
+          );
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _loadingDetails = false);
+    }
   }
 
   @override
@@ -334,6 +374,8 @@ class _GameDetailScreenState extends State<GameDetailScreen>
                                       ),
                                     ),
                                     const SizedBox(height: 20),
+                                    _buildExtendedSections(),
+                                    const SizedBox(height: 20),
                                     // Botón de acción
                                     SizedBox(
                                       width: double.infinity,
@@ -367,6 +409,235 @@ class _GameDetailScreenState extends State<GameDetailScreen>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildExtendedSections() {
+    if (widget.steamId == null) {
+      return _sectionBox(
+        child: const Text(
+          'Vincula Steam para ver descripción, tamaño y logros.',
+          style: TextStyle(color: Color(0xFF9999AA), fontSize: 13),
+        ),
+      );
+    }
+
+    if (_loadingDetails) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Center(
+          child: SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Color(0xFF6C5FFF),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final details = _extendedDetails;
+    if (details == null) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle('DE QUÉ TRATA'),
+        const SizedBox(height: 8),
+        _sectionBox(
+          child: Text(
+            details.description?.isNotEmpty == true
+                ? details.description!
+                : 'No se pudo cargar la descripción. Comprueba tu conexión o reinicia el proxy (dart run server/bin/server.dart).',
+            style: const TextStyle(
+              color: Color(0xFFCCCCDD),
+              fontSize: 13,
+              height: 1.45,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        _sectionTitle('ESPACIO EN DISCO'),
+        const SizedBox(height: 8),
+        _sectionBox(
+          child: Row(
+            children: [
+              const Icon(Icons.storage, color: Color(0xFF6C5FFF), size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  details.storageRequirement ??
+                      'Steam no publica el espacio en disco para este juego en sus requisitos.',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _buildAchievementsSection(details),
+      ],
+    );
+  }
+
+  Widget _buildAchievementsSection(GameExtendedDetails details) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle('LOGROS'),
+        const SizedBox(height: 8),
+        _sectionBox(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!details.hasAchievements) ...[
+                const Text(
+                  'Este juego no tiene logros en Steam.',
+                  style: TextStyle(color: Color(0xFF9999AA), fontSize: 13),
+                ),
+              ] else ...[
+                Row(
+                  children: [
+                    const Icon(Icons.emoji_events,
+                        color: Color(0xFF6C5FFF), size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${details.unlockedCount} / ${details.totalCount} desbloqueados',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: details.totalCount > 0
+                        ? details.unlockedCount / details.totalCount
+                        : 0,
+                    minHeight: 8,
+                    backgroundColor: const Color(0xFF2A2A3E),
+                    color: const Color(0xFF6C5FFF),
+                  ),
+                ),
+                if (details.achievementsNote != null) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    details.achievementsNote!,
+                    style: TextStyle(
+                      color: Colors.orange.withOpacity(0.9),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                ..._visibleAchievements(details).map(_achievementTile),
+                if (details.achievements.length > 8)
+                  TextButton(
+                    onPressed: () {
+                      setState(
+                        () => _showAllAchievements = !_showAllAchievements,
+                      );
+                    },
+                    child: Text(
+                      _showAllAchievements
+                          ? 'Ver menos'
+                          : 'Ver todos (${details.achievements.length})',
+                      style: const TextStyle(color: Color(0xFF6C5FFF)),
+                    ),
+                  ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<GameAchievement> _visibleAchievements(GameExtendedDetails details) {
+    if (_showAllAchievements) return details.achievements;
+    return details.achievements.take(8).toList();
+  }
+
+  Widget _achievementTile(GameAchievement achievement) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            achievement.unlocked ? Icons.check_circle : Icons.circle_outlined,
+            color: achievement.unlocked
+                ? const Color(0xFF6C5FFF)
+                : const Color(0xFF666680),
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  achievement.displayName.isNotEmpty
+                      ? achievement.displayName
+                      : achievement.apiName,
+                  style: TextStyle(
+                    color: achievement.unlocked
+                        ? Colors.white
+                        : const Color(0xFF9999AA),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (achievement.description.isNotEmpty)
+                  Text(
+                    achievement.description,
+                    style: const TextStyle(
+                      color: Color(0xFF777788),
+                      fontSize: 11,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.bold,
+        color: Color(0xFF9999AA),
+        letterSpacing: 0.5,
+      ),
+    );
+  }
+
+  Widget _sectionBox({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F0F1E),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF6C5FFF).withOpacity(0.2),
+        ),
+      ),
+      child: child,
     );
   }
 }
