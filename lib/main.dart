@@ -964,7 +964,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           itemCount: filteredGames.length,
                           itemBuilder: (context, index) {
                             final game = filteredGames[index];
-                            return GameCard(game: game);
+                            return GameCard(
+                              game: game,
+                              steamId: steamProvider.steamId,
+                            );
                           },
                         ),
                       SizedBox(height: layout.height * 0.03),
@@ -984,8 +987,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
 // Widget de tarjeta de juego
 class GameCard extends StatefulWidget {
   final Game game;
+  final String? steamId;
 
-  const GameCard({super.key, required this.game});
+  const GameCard({super.key, required this.game, this.steamId});
 
   @override
   State<GameCard> createState() => _GameCardState();
@@ -1031,6 +1035,7 @@ class _GameCardState extends State<GameCard> {
               MaterialPageRoute(
                 builder: (context) => GameDetailScreen(
                   game: widget.game,
+                  steamId: widget.steamId,
                 ),
               ),
             );

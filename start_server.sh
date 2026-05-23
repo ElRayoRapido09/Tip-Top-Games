@@ -18,7 +18,7 @@ fi
 cd ..
 
 echo ""
-echo "Ejecutando servidor en http://localhost:8080"
+echo "Ejecutando servidor en http://localhost:8765"
 echo "Presiona Ctrl+C para detener"
 echo ""
 
