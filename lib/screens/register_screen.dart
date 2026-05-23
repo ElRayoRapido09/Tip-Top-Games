@@ -21,6 +21,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _error;
   AppUser? _createdUser;
   final _steamApiService = SteamApiService();
+  bool _showPassword = false;
 
   @override
   void dispose() {
@@ -331,7 +332,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       // Password
                       TextField(
                         controller: _passwordController,
-                        obscureText: true,
+                        obscureText: !_showPassword,
                         decoration: InputDecoration(
                           hintText: 'Contraseña',
                           hintStyle: const TextStyle(
@@ -361,6 +362,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             Icons.lock,
                             color: Color(0xFF6C5FFF),
                           ),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _showPassword
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                              color: const Color(0xFF6C5FFF),
+                            ),
+                            onPressed: () {
+                              setState(() =>
+                                  _showPassword =
+                                      !_showPassword);
+                            },
+                          ),
                         ),
                         style: const TextStyle(color: Colors.white),
                       ),
@@ -369,7 +383,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       // Confirm Password
                       TextField(
                         controller: _confirmPasswordController,
-                        obscureText: true,
+                        obscureText: !_showPassword,
                         decoration: InputDecoration(
                           hintText: 'Confirmar contraseña',
                           hintStyle: const TextStyle(

@@ -39,9 +39,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _openUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    try {
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('No se puede abrir el enlace'),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al abrir enlace: $e'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
     }
   }
 
@@ -92,7 +110,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     displayName: displayName,
                     subtitle: user.email,
                     steamAvatarUrl: steamAvatar,
-                    onRefresh: provider.refreshProfile,
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -241,13 +258,11 @@ class _ProfileHeader extends StatelessWidget {
   final String displayName;
   final String subtitle;
   final String? steamAvatarUrl;
-  final VoidCallback onRefresh;
 
   const _ProfileHeader({
     required this.displayName,
     required this.subtitle,
     this.steamAvatarUrl,
-    required this.onRefresh,
   });
 
   @override
@@ -287,11 +302,6 @@ class _ProfileHeader extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
-              ),
-              IconButton(
-                onPressed: onRefresh,
-                icon: const Icon(Icons.refresh, color: Color(0xFF9999AA)),
-                tooltip: 'Actualizar',
               ),
             ],
           ),
