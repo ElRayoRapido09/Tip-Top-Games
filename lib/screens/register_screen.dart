@@ -74,7 +74,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   /// Validar email
   bool _isValidEmail(String email) {
-    return RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(email);
+    return RegExp(r'^[^@\s]+@[A-Za-z]+\.[A-Za-z]+$').hasMatch(email.trim());
   }
 
   /// Establecer error
@@ -618,13 +618,6 @@ class _SteamLinkingDialogState extends State<_SteamLinkingDialog> {
         ],
       ),
       actions: [
-        TextButton(
-          onPressed: _isLoading ? null : widget.onSkip,
-          child: const Text(
-            'Saltar',
-            style: TextStyle(color: Color(0xFF9999AA)),
-          ),
-        ),
         ElevatedButton(
           onPressed: _isLoading ? null : _linkSteam,
           style: ElevatedButton.styleFrom(
